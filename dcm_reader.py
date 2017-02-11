@@ -1,0 +1,109 @@
+import fnmatch
+import os
+import re
+import threading
+import dicom
+import numpy as np
+import tensorflow as tf
+import skimage
+import skimage.io
+import skimage.transform
+#G
+def get_corpus_size(directory, pattern='*.dcm'):
+    '''Recursively finds all files matching the pattern.'''
+    files = []
+    for root, dirnames, filenames in os.walk(directory):
+        for filename in fnmatch.filter(filenames, pattern):
+            files.append(os.path.join(root, filename))
+    return len(files)
+
+def find_files(directory, pattern='*.dcm'):
+    '''Recursively finds all files matching the pattern.'''
+    files = []
+    for root, dirnames, filenames in os.walk(directory):
+        for filename in fnmatch.filter(filenames, pattern):
+            files.append(os.path.join(root, filename))
+    return files
+
+
+def load_generic_dcm(directory, resize=None):
+    '''Generator that yields images from the directory.'''
+    files = find_files(directory)
+    for filename in files:
+        ds = dicom.read_file(filename)
+        img = ds.pixel_array
+        audio = audio.reshape(-1, 1)
+        yield img, filename
+
+
+def load_patient_dcm(directory, resize=None):
+    '''Generator that yields pixel_array from dataset, and
+    additionally the ID of the corresponding patient.'''
+    files = find_files(directory)
+    for filename in files:
+        ds = dicom.read_file(filename)
+        img = ds.pixel_array
+        img = img / 2000.0
+        assert (0 <= img).all() and (img <= 1.0).all()
+        if resize:
+            short_edge = min(img.shape[:2])
+            yy = int((img.shape[0] - short_edge) / 2)
+            xx = int((img.shape[1] - short_edge) / 2)
+            crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
+            # resize to 512, 512
+            img = skimage.transform.resize(crop_img, (resize, resize))
+        yield img, ds.PatientsName
+
+
+class DCMReader(object):
+    '''Generic background reader that preprocesses files
+    and enqueues them into a TensorFlow queue.'''
+
+    def __init__(self,
+                 data_dir,
+                 coord,
+                 resize=None,
+                 threshold=None,
+                 queue_size=64):
+        self.data_dir = data_dir
+        self.coord = coord
+        self.resize = resize
+        self.threshold = threshold
+        self.corpus_size = get_corpus_size(self.data_dir)
+        self.threads = []
+        self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
+        self.queue = tf.PaddingFIFOQueue(queue_size,
+                                         ['float32'],
+                                         shapes=[(self.resize, self.resize, 1)])
+        self.enqueue = self.queue.enqueue([self.sample_placeholder])
+
+    def dequeue(self, num_elements):
+        output = self.queue.dequeue_many(num_elements)
+        return output
+
+    def thread_main(self, sess):
+        buffer_ = np.array([])
+        stop = False
+        # Go through the dataset multiple times
+        while not stop:
+            iterator = load_patient_dcm(self.data_dir, self.resize)
+            for img, patient_id in iterator:
+                #print(filename)
+                if self.coord.should_stop():
+                    stop = True
+                    break
+                if self.threshold is not None:
+                    #TODO:  Perform quality check, make sure image is not blank
+                    pass
+
+                else:
+                    sess.run(self.enqueue,
+                             feed_dict={self.sample_placeholder: img})
+
+    def start_threads(self, sess, n_threads=1):
+        for _ in range(n_threads):
+            thread = threading.Thread(target=self.thread_main, args=(sess,))
+            thread.daemon = True  # Thread will close when parent quits.
+            thread.start()
+            self.threads.append(thread)
+        return self.threads
