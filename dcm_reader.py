@@ -52,10 +52,11 @@ def load_patient_dcm(directory, resize=None):
             xx = int((img.shape[1] - short_edge) / 2)
             crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
             # resize to 512, 512
-            img = skimage.transform.resize(crop_img, (resize, resize, 1))
+            img = skimage.transform.resize(crop_img, (resize, resize))
+        img = np.expand_dims(img, axis=-1)
         yield img, str(ds.PatientsName)
 
-def load_label_df(filename='/data2/Kaggle/LungCan/stage1_labels.csv'):
+def load_label_df(filename='stage1_labels.csv'):
     df = pandas.DataFrame.from_csv(filename)
     return df
 

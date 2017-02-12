@@ -122,7 +122,7 @@ def bn(x, c):
                          initializer=tf.zeros_initializer)
     gamma = _get_variable('gamma',
                           params_shape,
-                          initializer=tf.ones_initializer)
+                          initializer=tf.ones_initializer())
 
     moving_mean = _get_variable('moving_mean',
                                 params_shape,
@@ -130,7 +130,7 @@ def bn(x, c):
                                 trainable=False)
     moving_variance = _get_variable('moving_variance',
                                     params_shape,
-                                    initializer=tf.ones_initializer,
+                                    initializer=tf.ones_initializer(),
                                     trainable=False)
 
     # These ops will only be preformed when training.
