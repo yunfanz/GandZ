@@ -3,6 +3,7 @@ import os
 import re
 import threading
 import dicom
+import pandas
 import numpy as np
 import tensorflow as tf
 import skimage
@@ -44,15 +45,19 @@ def load_patient_dcm(directory, resize=None):
         ds = dicom.read_file(filename)
         img = ds.pixel_array
         img = img / 2000.0
-        assert (0 <= img).all() and (img <= 1.0).all()
-        if resize:
+        #assert (0 <= img).all() and (img <= 1.0).all() !!!
+        if resize and (ds.pixel_array.shape != (resize, resize)):
             short_edge = min(img.shape[:2])
             yy = int((img.shape[0] - short_edge) / 2)
             xx = int((img.shape[1] - short_edge) / 2)
             crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
             # resize to 512, 512
-            img = skimage.transform.resize(crop_img, (resize, resize))
-        yield img, ds.PatientsName
+            img = skimage.transform.resize(crop_img, (resize, resize, 1))
+        yield img, str(ds.PatientsName)
+
+def load_label_df(filename='/data2/Kaggle/LungCan/stage1_labels.csv'):
+    df = pandas.DataFrame.from_csv(filename)
+    return df
 
 
 class DCMReader(object):
@@ -72,14 +77,21 @@ class DCMReader(object):
         self.corpus_size = get_corpus_size(self.data_dir)
         self.threads = []
         self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
+        self.label_placeholder = tf.placeholder(dtype=tf.int32, shape=[], name='label') #!!!
         self.queue = tf.PaddingFIFOQueue(queue_size,
                                          ['float32'],
                                          shapes=[(self.resize, self.resize, 1)])
         self.enqueue = self.queue.enqueue([self.sample_placeholder])
+        self.queue_l = tf.FIFOQueue(queue_size,
+                                         'int32',
+                                         shapes=[])
+        self.enqueue_l = self.queue_l.enqueue([self.label_placeholder])
+        self.labels_df = load_label_df()
 
     def dequeue(self, num_elements):
         output = self.queue.dequeue_many(num_elements)
-        return output
+        labels = self.queue_l.dequeue_many(num_elements)
+        return output, labels
 
     def thread_main(self, sess):
         buffer_ = np.array([])
@@ -89,6 +101,7 @@ class DCMReader(object):
             iterator = load_patient_dcm(self.data_dir, self.resize)
             for img, patient_id in iterator:
                 #print(filename)
+                label = self.labels_df['cancer'][patient_id]
                 if self.coord.should_stop():
                     stop = True
                     break
@@ -99,6 +112,8 @@ class DCMReader(object):
                 else:
                     sess.run(self.enqueue,
                              feed_dict={self.sample_placeholder: img})
+                    sess.run(self.enqueue_l,
+                             feed_dict={self.label_placeholder: label})
 
     def start_threads(self, sess, n_threads=1):
         for _ in range(n_threads):
