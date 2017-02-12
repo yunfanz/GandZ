@@ -1,6 +1,7 @@
 import tensorflow as tf
 from resnet import RESNET, UPDATE_OPS_COLLECTION, RESNET_VARIABLES, MOVING_AVERAGE_DECAY
 from dcm_reader import DCMReader
+import numpy as np
 import os
 import time
 MOMENTUM = 0.9
@@ -13,7 +14,7 @@ tf.app.flags.DEFINE_string('data_dir', '/data2/Kaggle/LungCan/stage1/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 tf.app.flags.DEFINE_float('learning_rate', 0.01, "learning rate.")
-tf.app.flags.DEFINE_integer('batch_size', 4, "batch size")
+tf.app.flags.DEFINE_integer('batch_size', 8, "batch size")
 tf.app.flags.DEFINE_integer('num_per_epoch', None, "max steps per epoch")
 tf.app.flags.DEFINE_integer('epoch', 1, "number of epochs to train")
 tf.app.flags.DEFINE_boolean('resume', False,
@@ -26,8 +27,9 @@ def top_k_error(predictions, labels, k):
     batch_size = float(FLAGS.batch_size) #tf.shape(predictions)[0]
     in_top1 = tf.to_float(tf.nn.in_top_k(predictions, labels, k=1))
     num_correct = tf.reduce_sum(in_top1)
+    print(num_correct, " correct")
     return (batch_size - num_correct) / batch_size
-
+    #return num_correct
 def train(sess, net, is_training):
     
     coord = tf.train.Coordinator()
@@ -128,7 +130,7 @@ def train(sess, net, is_training):
                     examples_per_sec = FLAGS.batch_size / float(duration)
                     format_str = ('Epoch %d, [%d / %d], loss = %.2f (%.1f examples/sec; %.3f '
                                   'sec/batch)')
-                    print(format_str % (epoch, idx, corpus_size, loss_value, examples_per_sec, duration))
+                    print(format_str % (epoch, idx, batch_idx, loss_value, examples_per_sec, duration))
 
                 if write_summary:
                     summary_str = o[2]
@@ -141,7 +143,7 @@ def train(sess, net, is_training):
 
                 # Run validation periodically
                 if step > 1 and step % 100 == 0:
-                    _, top1_error_value = self.sess.run([val_op, top1_error], { is_training: False })
+                    _, top1_error_value = sess.run([val_op, top1_error], { is_training: False })
                     print('Validation top1 error %.2f' % top1_error_value)
 
     except KeyboardInterrupt:

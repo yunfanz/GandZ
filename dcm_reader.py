@@ -54,7 +54,7 @@ def load_patient_dcm(directory, resize=None):
             # resize to 512, 512
             img = skimage.transform.resize(crop_img, (resize, resize))
         img = np.expand_dims(img, axis=-1)
-        yield img, str(ds.PatientsName)
+        yield img, str(ds.PatientID)
 
 def load_label_df(filename='stage1_labels.csv'):
     df = pandas.DataFrame.from_csv(filename)
@@ -102,7 +102,11 @@ class DCMReader(object):
             iterator = load_patient_dcm(self.data_dir, self.resize)
             for img, patient_id in iterator:
                 #print(filename)
-                label = self.labels_df['cancer'][patient_id]
+                try: 
+                    label = self.labels_df['cancer'][patient_id]
+                except(KeyError):
+                    print('No match for ', patient_id)
+                    continue
                 if self.coord.should_stop():
                     stop = True
                     break
