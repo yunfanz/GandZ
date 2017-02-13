@@ -15,7 +15,8 @@ class PatientImageProcesor(object):
     '''Image processor for a patient. Loads data from *.dcm files by default and processes.'''
 
 	def __init__(self, patient_directory):
-        self.files = self.find_files(patient_directory)
+        self.patient_directory = patient_directory
+        self.files = self.find_files(self.patient_directory)
         self.corpus_size = len(self.files)
 
 	def find_files(self,directory, pattern='*.dcm'):
@@ -37,7 +38,17 @@ class PatientImageProcesor(object):
 
     def add_slice_thickness(self):
         '''Add the slice thickness to the meta data'''
-        self.        
+        slices = [dicom.read_file(file) for file in .self.files]
+        slices.sort(key = lambda x: int(x.ImagePositionPatient[2]))
+        try: 
+            slice_thickness = np.abs(slices[0].ImagePositionPatient[2] - slices[1].ImagePositionPatient[2])
+        except:
+            slice_thickness = np.abs(slices[0].SliceLocation - slices[1].SliceLocation)
+    
+        for s in slices:
+            s.SliceThickness = slice_thickness
+        
+        return slices
 
 
     def rescale_2_hu(self,dcm):
