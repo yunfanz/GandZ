@@ -13,13 +13,15 @@ import skimage.transform
 
 class PatientImageProcesor(object):
     '''Image processor for a patient. Loads data from *.dcm files by default and processes.'''
-
-	def __init__(self, patient_directory):
+    def __init__(self, patient_directory):
         self.patient_directory = patient_directory
         self.files = self.find_files(self.patient_directory)
+        self.slices = self.add_slice_thickness()
+        self.images = [self.rescale_2_hu(dcm) for dcm in self.slices]
+#        self.resampled_images = [self.resample(image, dcm, new_spacing=[1,1,1]) for image, dcm in zip(self.images, self.slices)]
         self.corpus_size = len(self.files)
 
-	def find_files(self,directory, pattern='*.dcm'):
+    def find_files(self,directory, pattern='*.dcm'):
         '''Recursively finds all files matching the pattern.'''
         files = []
         for root, dirnames, filenames in os.walk(directory):
@@ -38,7 +40,7 @@ class PatientImageProcesor(object):
 
     def add_slice_thickness(self):
         '''Add the slice thickness to the meta data'''
-        slices = [dicom.read_file(file) for file in .self.files]
+        slices = [dicom.read_file(file) for file in self.files]
         slices.sort(key = lambda x: int(x.ImagePositionPatient[2]))
         try: 
             slice_thickness = np.abs(slices[0].ImagePositionPatient[2] - slices[1].ImagePositionPatient[2])
@@ -50,18 +52,42 @@ class PatientImageProcesor(object):
         
         return slices
 
-
     def rescale_2_hu(self,dcm):
         '''Rescale image to hounsfield unit.'''
-        dcm[dcm==-2000] = 0.0
+        #zero out parts of scan that are not part of image.
+        dcm.pixel_array[dcm.pixel_array==-2000] = 0
+        #convert to hu units.
         if dcm.RescaleSlope != 1:
             dcm.pixel_array = dcm.RescaleSlope*dcm.pixel_array.astype(np.float64)
             dcm.pixel_array = dcm.pixel_array.astype(np.int16)
         dcm.pixel_array += np.int16(dcm.RescaleIntercept)
 
         return dcm.pixel_array
-        
 
+    def resample(self, image, scan, new_spacing=[1,1,1]):
+        # Determine current pixel spacing
+        spacing = np.array([scan.SliceThickness] + scan.PixelSpacing, dtype=np.float32)
+
+        resize_factor = spacing / new_spacing
+        print(resize_factor)
+        print(image.shape)
+        new_real_shape = image.shape * resize_factor
+        new_shape = np.round(new_real_shape)
+        real_resize_factor = new_shape / image.shape
+        new_spacing = spacing / real_resize_factor
+        
+        image = scipy.ndimage.interpolation.zoom(image, real_resize_factor, mode='nearest')
+        
+        return image, new_spacing
+
+    def batch_resample(self, images, scans, new_spacing=[1,1,1]):
+        new_shapes = []
+        for i, image, dcm in enumerate(zip(self.images,self.slices)):
+            im, ns = resample(image, dcm, new_spacing=new_spacing)
+            self.images[i] = im
+            new_shapes.append(ns)
+        return self.images
+         
     def load_patient_dcm(self, directory, resize=None):
         '''Generator that yields pixel_array from dataset, and
         additionally the ID of the corresponding patient.'''
