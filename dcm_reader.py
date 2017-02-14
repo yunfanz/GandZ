@@ -45,16 +45,30 @@ def load_individual_dcm(directory):
         img = get_image_e2e([ds])
         yield img, str(ds.PatientID)
 
+def load_patient_npy(path):
+    if not path.endswith('/'): 
+        path += '/'
+    for fname in os.listdir(path):
+        img = np.load(path+fname)
+        pid = fname.split('.')[0]
+        yield img, pid
 
-def load_patient_dcm(path):
+def load_patient(path):
     '''Generator that yields pixel_array from dataset, and
     additionally the ID of the corresponding patient.'''
     if not path.endswith('/'): 
         path += '/'
-    for patient_dir in os.listdir(path):
-        slices = load_scan(path+patient_dir)
-        img = get_image_e2e(slices)
-        yield img, patient_dir
+    #print(path, len(os.listdir(path)))
+    for fname in os.listdir(path):
+        #print(fname)
+        if fname.endswith('.npy'):
+            img = np.load(path+fname)
+            pid = fname.split('.')[0]
+        else:
+            slices = load_scan(path+fname)
+            img = get_image_e2e(slices)
+            pid = fname
+        yield img, pid
 
 def load_label_df(filename='stage1_labels.csv'):
     df = pandas.DataFrame.from_csv(filename)
@@ -103,7 +117,7 @@ class DCMReader(object):
         # Go through the dataset multiple times
         while not stop:
             if self.byPatient:
-                iterator = load_patient_dcm(self.data_dir)
+                iterator = load_patient(self.data_dir)
             else:
                 iterator = load_individual_dcm(self.data_dir)
             for img, patient_id in iterator:
@@ -126,7 +140,7 @@ class DCMReader(object):
                     sess.run(self.enqueue_l,
                              feed_dict={self.label_placeholder: label})
 
-    def start_threads(self, sess, n_threads=2):
+    def start_threads(self, sess, n_threads=1):
         for _ in range(n_threads):
             thread = threading.Thread(target=self.thread_main, args=(sess,))
             thread.daemon = True  # Thread will close when parent quits.

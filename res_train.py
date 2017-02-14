@@ -170,7 +170,8 @@ def train(sess, net, is_training):
 
 def load_dcm(coord, data_dir):
     if not data_dir:
-        data_dir = os.path.join("/data2/Kaggle/Lungcan/", 'stage1')
+        data_dir = os.path.join("/data2/Kaggle/Lungcan/", 'stage1/')
+    print('Using data_dir', data_dir)
 
     reader = DCMReader(
         data_dir,

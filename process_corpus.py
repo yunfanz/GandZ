@@ -8,6 +8,8 @@ from joblib import Parallel, delayed
 
 CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
 TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp1_morphseg/train/'
+#CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
+#TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/train/'
 
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 	print('id, nslices, shape, max, min ')
@@ -59,6 +61,8 @@ if __name__=='__main__':
 	#get_corpus_metadata()
 	#for patient_dir in os.listdir(CORPUS_DIR):
 	#convert_patient_dcm('0015ceb851d7251b8f399e39779d1e7d')
+
 	df = pd.DataFrame.from_csv('stage1_labels.csv')
 	PIDL = df.index.tolist()
-	Parallel(n_jobs=16)(delayed(convert_patient_dcm)(pid) for pid in PIDL)
+    #PIDL = os.listdir(CORPUS_DIR)
+    Parallel(n_jobs=12)(delayed(convert_patient_dcm)(pid) for pid in PIDL)
