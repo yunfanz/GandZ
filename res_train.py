@@ -177,7 +177,7 @@ def load_dcm(coord, data_dir):
         data_dir,
         coord,
         e2e=True,
-        queue_size=8, 
+        queue_size=16, 
         byPatient=True)
     return reader
 
@@ -193,8 +193,8 @@ def main(_):
     net = RESNET(sess, 
                 dim=3,
                 num_classes=2,
-                num_blocks=[3, 4, 6, 3],  # defaults to 50-layer network
-                num_chans=[16,16,32,64,128],
+                num_blocks=[3, 4, 3],  # defaults to 50-layer network
+                num_chans=[16,16,32,64],
                 use_bias=False, # defaults to using batch norm
                 bottleneck=True,
                 is_training=True)
