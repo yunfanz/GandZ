@@ -82,13 +82,15 @@ class DCMReader(object):
                  coord,
                  e2e=False,    #TODO: not yet implemented, for preprocessed inputs
                  threshold=None,
-                 queue_size=64, 
-                 byPatient=False):
+                 queue_size=16, 
+                 byPatient=True,
+                 pattern='*.npy'):
         self.data_dir = data_dir
         self.coord = coord
         self.e2e = e2e
         self.threshold = threshold
-        self.corpus_size = get_corpus_size(self.data_dir, pattern='*.npy')
+        self.ftype = pattern
+        self.corpus_size = get_corpus_size(self.data_dir, pattern=self.ftype)
         self.threads = []
         self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
         self.label_placeholder = tf.placeholder(dtype=tf.int32, shape=[], name='label') #!!!
@@ -129,7 +131,7 @@ class DCMReader(object):
                     stop = True
                     break
                 if self.threshold is not None:
-                    #TODO:  Perform quality check, make sure image is not blank
+                    #TODO:  Perform quality check if needed
                     pass
 
                 else:
