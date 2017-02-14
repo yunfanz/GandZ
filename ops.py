@@ -37,16 +37,16 @@ activation = tf.nn.relu
 
 
 
-def stack(x, c):
+def stack(x, c, dim=2):
     for n in range(c['num_blocks']):
         s = c['stack_stride'] if n == 0 else 1
         c['block_stride'] = s
         with tf.variable_scope('block%d' % (n + 1)):
-            x = block(x, c)
+            x = block(x, c, dim=dim)
     return x
 
 
-def block(x, c):
+def block(x, c, dim=2):
     filters_in = x.get_shape()[-1]
 
     # Note: filters_out isn't how many filters are outputed. 
@@ -59,17 +59,16 @@ def block(x, c):
     shortcut = x  # branch 1
 
     c['conv_filters_out'] = c['block_filters_internal']
-
     if c['bottleneck']:
         with tf.variable_scope('a'):
             c['ksize'] = 1
             c['stride'] = c['block_stride']
-            x = conv(x, c)
+            x = conv(x, c, dim=dim)
             x = bn(x, c)
             x = activation(x)
 
         with tf.variable_scope('b'):
-            x = conv(x, c)
+            x = conv(x, c, dim=dim)
             x = bn(x, c)
             x = activation(x)
 
@@ -77,13 +76,13 @@ def block(x, c):
             c['conv_filters_out'] = filters_out
             c['ksize'] = 1
             assert c['stride'] == 1
-            x = conv(x, c)
+            x = conv(x, c, dim=dim)
             x = bn(x, c)
     else:
         with tf.variable_scope('A'):
             c['stride'] = c['block_stride']
             assert c['ksize'] == 3
-            x = conv(x, c)
+            x = conv(x, c, dim=dim)
             x = bn(x, c)
             x = activation(x)
 
@@ -91,7 +90,7 @@ def block(x, c):
             c['conv_filters_out'] = filters_out
             assert c['ksize'] == 3
             assert c['stride'] == 1
-            x = conv(x, c)
+            x = conv(x, c, dim=dim)
             x = bn(x, c)
 
     with tf.variable_scope('shortcut'):
@@ -99,7 +98,7 @@ def block(x, c):
             c['ksize'] = 1
             c['stride'] = c['block_stride']
             c['conv_filters_out'] = filters_out
-            shortcut = conv(shortcut, c)
+            shortcut = conv(shortcut, c, dim=dim)
             shortcut = bn(shortcut, c)
 
     return activation(x + shortcut)
@@ -191,24 +190,37 @@ def _get_variable(name,
                            trainable=trainable)
 
 
-def conv(x, c):
+def conv(x, c, dim=2):
     ksize = c['ksize']
     stride = c['stride']
     filters_out = c['conv_filters_out']
 
     filters_in = x.get_shape()[-1]
-    shape = [ksize, ksize, filters_in, filters_out]
+    if dim == 2:
+        shape = [ksize, ksize, filters_in, filters_out]
+    elif dim ==3:
+        shape = [ksize, ksize, ksize, filters_in, filters_out]
     initializer = tf.truncated_normal_initializer(stddev=CONV_WEIGHT_STDDEV)
     weights = _get_variable('weights',
                             shape=shape,
                             dtype='float',
                             initializer=initializer,
                             weight_decay=CONV_WEIGHT_DECAY)
-    return tf.nn.conv2d(x, weights, [1, stride, stride, 1], padding='SAME')
+    if dim == 2:
+        return tf.nn.conv2d(x, weights, [1, stride, stride, 1], padding='SAME')
+    elif dim == 3:
+        return tf.nn.conv3d(x, weights, [1, stride, stride, stride, 1], padding='SAME')
 
 
-def max_pool(x, ksize=3, stride=2):
-    return tf.nn.max_pool(x,
-                          ksize=[1, ksize, ksize, 1],
-                          strides=[1, stride, stride, 1],
+def max_pool(x, ksize=3, stride=2, dim=2):
+    if dim == 2:
+        return tf.nn.max_pool(x,
+                              ksize=[1, ksize, ksize, 1],
+                              strides=[1, stride, stride, 1],
+                              padding='SAME')
+    elif dim ==3:
+        return tf.nn.max_pool3d(x,
+                          ksize=[1, ksize, ksize, ksize, 1],
+                          strides=[1, stride, stride, stride, 1],
                           padding='SAME')
+

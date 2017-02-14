@@ -9,6 +9,7 @@ import tensorflow as tf
 import skimage
 import skimage.io
 import skimage.transform
+from preprocess import *
 #G
 def get_corpus_size(directory, pattern='*.dcm'):
     '''Recursively finds all files matching the pattern.'''
@@ -26,35 +27,34 @@ def find_files(directory, pattern='*.dcm'):
             files.append(os.path.join(root, filename))
     return files
 
+def get_image_e2e(slices):
+    image = get_pixels_hu(slices)
+    #image, new_spacing = resample(image, slices, [1,1,1])
+    segmented_mask_fill = segment_lung_mask(image, True)
+    image = image*segmented_mask_fill
+    image = zero_center(normalize(image))
+    image.shape+=(1,)
+    return image
 
-def load_generic_dcm(directory, resize=None):
-    '''Generator that yields images from the directory.'''
-    files = find_files(directory)
-    for filename in files:
-        ds = dicom.read_file(filename)
-        img = ds.pixel_array
-        audio = audio.reshape(-1, 1)
-        yield img, filename
-
-
-def load_patient_dcm(directory, resize=None):
+def load_individual_dcm(directory):
     '''Generator that yields pixel_array from dataset, and
     additionally the ID of the corresponding patient.'''
     files = find_files(directory)
     for filename in files:
         ds = dicom.read_file(filename)
-        img = ds.pixel_array
-        img = img / 2000.0
-        #assert (0 <= img).all() and (img <= 1.0).all() !!!
-        if resize and (ds.pixel_array.shape != (resize, resize)):
-            short_edge = min(img.shape[:2])
-            yy = int((img.shape[0] - short_edge) / 2)
-            xx = int((img.shape[1] - short_edge) / 2)
-            crop_img = img[yy: yy + short_edge, xx: xx + short_edge]
-            # resize to 512, 512
-            img = skimage.transform.resize(crop_img, (resize, resize))
-        img = np.expand_dims(img, axis=-1)
+        img = get_image_e2e([ds])
         yield img, str(ds.PatientID)
+
+
+def load_patient_dcm(path):
+    '''Generator that yields pixel_array from dataset, and
+    additionally the ID of the corresponding patient.'''
+    if not path.endswith('/'): 
+        path += '/'
+    for patient_dir in os.listdir(path):
+        slices = load_scan(path+patient_dir)
+        img = get_image_e2e(slices)
+        yield img, patient_dir
 
 def load_label_df(filename='stage1_labels.csv'):
     df = pandas.DataFrame.from_csv(filename)
@@ -68,25 +68,28 @@ class DCMReader(object):
     def __init__(self,
                  data_dir,
                  coord,
-                 resize=None,
+                 e2e=False,    #TODO: not yet implemented, for preprocessed inputs
                  threshold=None,
-                 queue_size=64):
+                 queue_size=64, 
+                 byPatient=False):
         self.data_dir = data_dir
         self.coord = coord
-        self.resize = resize
+        self.e2e = e2e
         self.threshold = threshold
         self.corpus_size = get_corpus_size(self.data_dir)
         self.threads = []
         self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
         self.label_placeholder = tf.placeholder(dtype=tf.int32, shape=[], name='label') #!!!
+        self.q_shape = [(None, None, None, 1)] if byPatient else [(None, None, 1)]
         self.queue = tf.PaddingFIFOQueue(queue_size,
                                          ['float32'],
-                                         shapes=[(self.resize, self.resize, 1)])
+                                         shapes=self.q_shape)
         self.enqueue = self.queue.enqueue([self.sample_placeholder])
         self.queue_l = tf.FIFOQueue(queue_size,
                                          'int32',
                                          shapes=[])
         self.enqueue_l = self.queue_l.enqueue([self.label_placeholder])
+        self.byPatient = byPatient
         self.labels_df = load_label_df()
 
     def dequeue(self, num_elements):
@@ -99,7 +102,10 @@ class DCMReader(object):
         stop = False
         # Go through the dataset multiple times
         while not stop:
-            iterator = load_patient_dcm(self.data_dir, self.resize)
+            if self.byPatient:
+                iterator = load_patient_dcm(self.data_dir)
+            else:
+                iterator = load_individual_dcm(self.data_dir)
             for img, patient_id in iterator:
                 #print(filename)
                 try: 
@@ -120,7 +126,7 @@ class DCMReader(object):
                     sess.run(self.enqueue_l,
                              feed_dict={self.label_placeholder: label})
 
-    def start_threads(self, sess, n_threads=1):
+    def start_threads(self, sess, n_threads=2):
         for _ in range(n_threads):
             thread = threading.Thread(target=self.thread_main, args=(sess,))
             thread.daemon = True  # Thread will close when parent quits.

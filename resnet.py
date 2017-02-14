@@ -18,15 +18,20 @@ activation = tf.nn.relu
 
 class RESNET(object):
     def __init__(self, sess,
+                dim=2,
                 num_classes=1000,
                 num_blocks=[3, 4, 6, 3],  # defaults to 50-layer network
+                num_chans=[64,64,128,256,512],
                 use_bias=False, # defaults to using batch norm
                 bottleneck=True,
                 is_training=True):
         self.c = Config()
         self.sess = sess
+        self.dim = dim
         self.num_classes = num_classes
         self.num_blocks = num_blocks
+        self.num_chans = num_chans
+        self.num_scales = len(num_chans)
         self.c['bottleneck'] = bottleneck
         self.c['use_bias'] = use_bias
         self.c['fc_units_out'] = num_classes
@@ -44,44 +49,48 @@ class RESNET(object):
         tf.scalar_summary('loss', loss_)
 
         return loss_
+
     def inference(self, x):
         self.c['ksize'] = 3
         self.c['stride'] = 1
         self.c['stack_stride'] = 2
 
         with tf.variable_scope('scale1'):
-            self.c['conv_filters_out'] = 64
+            self.c['conv_filters_out'] = self.num_chans[0]
             self.c['ksize'] = 7
             self.c['stride'] = 2
-            x = conv(x, self.c)
+            x = conv(x, self.c, self.dim)
             x = bn(x, self.c)
             x = activation(x)
 
         with tf.variable_scope('scale2'):
-            x = max_pool(x, ksize=3, stride=2)
+            x = max_pool(x, ksize=3, stride=2, dim=self.dim)
             self.c['num_blocks'] = self.num_blocks[0]
             self.c['stack_stride'] = 1
-            self.c['block_filters_internal'] = 64
-            x = stack(x, self.c)
+            self.c['block_filters_internal'] = self.num_chans[1]
+            x = stack(x, self.c, self.dim)
 
         with tf.variable_scope('scale3'):
             self.c['num_blocks'] = self.num_blocks[1]
-            self.c['block_filters_internal'] = 128
+            self.c['block_filters_internal'] = self.num_chans[2]
             assert self.c['stack_stride'] == 2
-            x = stack(x, self.c)
+            x = stack(x, self.c, self.dim)
 
         with tf.variable_scope('scale4'):
             self.c['num_blocks'] = self.num_blocks[2]
-            self.c['block_filters_internal'] = 256
-            x = stack(x, self.c)
+            self.c['block_filters_internal'] = self.num_chans[3]
+            x = stack(x, self.c, self.dim)
 
         with tf.variable_scope('scale5'):
             self.c['num_blocks'] = self.num_blocks[3]
-            self.c['block_filters_internal'] = 512
-            x = stack(x, self.c)
+            self.c['block_filters_internal'] = self.num_chans[4]
+            x = stack(x, self.c, self.dim)
 
         # post-net
-        x = tf.reduce_mean(x, reduction_indices=[1, 2], name="avg_pool")
+        if self.dim==2:
+            x = tf.reduce_mean(x, reduction_indices=[1, 2], name="avg_pool")
+        elif self.dim == 3:
+            x = tf.reduce_mean(x, reduction_indices=[1, 2, 3], name="avg_pool")
 
         if self.num_classes != None:
             with tf.variable_scope('fc'):

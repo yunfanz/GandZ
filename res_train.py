@@ -14,7 +14,7 @@ tf.app.flags.DEFINE_string('data_dir', '/data2/Kaggle/LungCan/stage1/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 tf.app.flags.DEFINE_float('learning_rate', 0.01, "learning rate.")
-tf.app.flags.DEFINE_integer('batch_size', 8, "batch size")
+tf.app.flags.DEFINE_integer('batch_size', 1, "batch size")
 tf.app.flags.DEFINE_integer('num_per_epoch', None, "max steps per epoch")
 tf.app.flags.DEFINE_integer('epoch', 1, "number of epochs to train")
 tf.app.flags.DEFINE_boolean('resume', False,
@@ -27,9 +27,11 @@ def top_k_error(predictions, labels, k):
     batch_size = float(FLAGS.batch_size) #tf.shape(predictions)[0]
     in_top1 = tf.to_float(tf.nn.in_top_k(predictions, labels, k=1))
     num_correct = tf.reduce_sum(in_top1)
-    print(num_correct, " correct")
     return (batch_size - num_correct) / batch_size
     #return num_correct
+def hack_final_block(logits):
+    return
+    
 def train(sess, net, is_training):
     
     coord = tf.train.Coordinator()
@@ -43,10 +45,17 @@ def train(sess, net, is_training):
     val_step = tf.get_variable('val_step', [],
                                   initializer=tf.constant_initializer(0),
                                   trainable=False)
+
+    if False:
+        train_batch = tf.transpose(train_batch, [3,1,2,0])  #treat slice index as sub_batch index
+
     logits = net.inference(train_batch)
+
+    #import IPython; IPython.embed()
+
     loss_ = net.loss(logits, labels)
     predictions = tf.nn.softmax(logits)
-
+    #import IPython; IPython.embed()
     top1_error = top_k_error(predictions, labels, 1)
 
 
@@ -86,7 +95,7 @@ def train(sess, net, is_training):
     summary_op = tf.merge_all_summaries()
 
     init = tf.initialize_all_variables()
-
+    #import IPython; IPython.embed()
     sess.run(init)
 
     summary_writer = tf.train.SummaryWriter(FLAGS.train_dir, sess.graph)
@@ -126,7 +135,7 @@ def train(sess, net, is_training):
 
                 assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-                if step % 5 == 0:
+                if step % 1 == 0:
                     examples_per_sec = FLAGS.batch_size / float(duration)
                     format_str = ('Epoch %d, [%d / %d], loss = %.2f (%.1f examples/sec; %.3f '
                                   'sec/batch)')
@@ -137,13 +146,16 @@ def train(sess, net, is_training):
                     summary_writer.add_summary(summary_str, step)
 
                 # Save the model checkpoint periodically.
-                if step > 1 and step % 500 == 0:
+                if step > 1 and step % 100 == 0:
                     checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
                     saver.save(sess, checkpoint_path, global_step=global_step)
 
                 # Run validation periodically
                 if step > 1 and step % 100 == 0:
                     _, top1_error_value = sess.run([val_op, top1_error], { is_training: False })
+                    pp, ll = sess.run([predictions, labels], {is_training:False})
+                    print('Predictions: ', pp)
+                    print('labels: ', ll)
                     print('Validation top1 error %.2f' % top1_error_value)
 
     except KeyboardInterrupt:
@@ -163,17 +175,25 @@ def load_dcm(coord, data_dir):
     reader = DCMReader(
         data_dir,
         coord,
-        resize=512)
+        e2e=True,
+        queue_size=8, 
+        byPatient=True)
     return reader
 
 
 def main(_):
-    sess = tf.Session(config=tf.ConfigProto(log_device_placement=False))
+
+    sessconfig = tf.ConfigProto()
+    sessconfig.gpu_options.allow_growth = True
+    sess = tf.Session(config=sessconfig)
+    #sess = tf.Session(config=tf.ConfigProto(log_device_placement=False))
     
     is_training = tf.placeholder('bool', [], name='is_training')
     net = RESNET(sess, 
+                dim=3,
                 num_classes=2,
                 num_blocks=[3, 4, 6, 3],  # defaults to 50-layer network
+                num_chans=[16,16,32,64,128],
                 use_bias=False, # defaults to using batch norm
                 bottleneck=True,
                 is_training=True)

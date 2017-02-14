@@ -102,10 +102,11 @@ if __name__ == '__main__':
 
         with tf.variable_scope('meow'):
             c['dog'] = 3
+            c['hello'] = 10
             assert c['dog'] == 3
             assert c['bar'] == 2
-            assert c['hello'] == 1
-
+            assert c['hello'] == 10
+            print(c['hello'])
             assert c['mario'] == True
 
         assert_raises(KeyError, lambda: c['dog'])
