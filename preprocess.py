@@ -203,3 +203,29 @@ def seperate_lungs_watershed(image, verbose_output=False):
         return segmented, lungfilter, outline, watershed, sobel_gradient, marker_internal, marker_external, marker_watershed
     else:
         return segmented
+
+
+
+def bbox_3d(img):
+
+    z = np.any(img, axis=(1, 2))
+    r = np.any(img, axis=(0, 2))
+    c = np.any(img, axis=(0, 1))
+
+    rmin, rmax = np.where(r)[0][[0, -1]]
+    cmin, cmax = np.where(c)[0][[0, -1]]
+    zmin, zmax = np.where(z)[0][[0, -1]]
+
+    return zmin, zmax, rmin, rmax, cmin, cmax
+
+def corner_to_center_and_size(zmin, zmax, rmin, rmax, cmin, cmax):
+    center2 = ((zmax+zmin),(rmax+rmin),(cmax+cmin))
+    b_size = ((zmax-zmin),(zmax-zmin),(zmax-zmin))
+    return center2, b_size
+def center_and_size_to_corner(center2, b_size):
+    maxes = (center2+b_size)//2
+    mines = (center2-b_size)//2
+    return maxes, mines
+
+
+

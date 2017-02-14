@@ -8,9 +8,10 @@ from joblib import Parallel, delayed
 
 CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
 TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp1_morphseg/train/'
+MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
 #CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
-#TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/train/'
-
+#TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
+#MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 	print('id, nslices, shape, max, min ')
 	for subpath in os.listdir(path):
@@ -23,7 +24,7 @@ def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 
 		print(subpath, n_slices, shape, maxx, minn)
 
-def get_image_e2e(slices):
+def get_image_e2e(slices, return_mask=False):
     image = get_pixels_hu(slices)
     image, new_spacing = resample(image, slices, [1,1,1])
     segmented_mask_fill = segment_lung_mask(image, True)
@@ -31,16 +32,39 @@ def get_image_e2e(slices):
     image = image*mask
     image = zero_center(normalize(image))
     #image.shape+=(1,)
-    return image
+    if return_mask: 
+        return image, mask
+    else:
+        return image
 
-def convert_patient_dcm(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR):
+def get_masks(pid, data_dir=CORPUS_DIR, target_dir=MASK_DIR):
     '''Generator that yields pixel_array from dataset, and
     additionally the ID of the corresponding patient.'''
     
     slices = load_scan(data_dir+pid)
-    img = get_image_e2e(slices).astype('float32')
+    mask = get_image_e2e(slices, return_mask=True)[1].astype('int8')
+    filename =  target_dir+'mask_'+pid+'.npy'
+    np.save(filename, mask)
+    print(pid, 'processed')
+    return 0
+
+def convert_patient_dcm(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None, bbox=False):
+    '''Generator that yields pixel_array from dataset, and
+    additionally the ID of the corresponding patient.'''
+    
+    slices = load_scan(data_dir+pid)
+    img, mask = get_image_e2e(slices, return_mask=True)
+    img = img.astype('float32')
+    mask = mask.astype('int8')
+    if bbox:
+        zmin, zmax, rmin, rmax, cmin, cmax = bbox_3d(mask)
+        img = img[zmin:zmax,rmin:rmax,cmin:cmax]
+        #mask = mask[zmin:zmax,rmin:rmax,cmin:cmax]
     filename =  target_dir+pid+'.npy'
     np.save(filename, img)
+    if mask_dir:
+        mfname = mask_dir+'mask_'+pid+'.npy'
+        np.save(mfname, mask)
     print(pid, 'processed')
     return 0
 
@@ -56,6 +80,9 @@ def check_corpus(filename='stage1_labels.csv'):
     print(c)
     return c
 
+def get_max_box_sizes(path=MASK_DIR):
+
+
 if __name__=='__main__':
 	#check_corpus()
 	#get_corpus_metadata()
@@ -65,4 +92,4 @@ if __name__=='__main__':
 	df = pd.DataFrame.from_csv('stage1_labels.csv')
 	PIDL = df.index.tolist()
     #PIDL = os.listdir(CORPUS_DIR)
-    Parallel(n_jobs=12)(delayed(convert_patient_dcm)(pid) for pid in PIDL)
+    Parallel(n_jobs=16)(delayed(get_masks)(pid) for pid in PIDL)
