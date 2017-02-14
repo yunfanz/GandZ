@@ -33,7 +33,6 @@ def get_image_e2e(slices):
     segmented_mask_fill = segment_lung_mask(image, True)
     image = image*segmented_mask_fill
     image = zero_center(normalize(image))
-    image.shape+=(1,)
     return image
 
 def load_individual_dcm(directory):
@@ -58,9 +57,7 @@ def load_patient(path):
     additionally the ID of the corresponding patient.'''
     if not path.endswith('/'): 
         path += '/'
-    #print(path, len(os.listdir(path)))
     for fname in os.listdir(path):
-        #print(fname)
         if fname.endswith('.npy'):
             img = np.load(path+fname)
             pid = fname.split('.')[0]
@@ -68,6 +65,7 @@ def load_patient(path):
             slices = load_scan(path+fname)
             img = get_image_e2e(slices)
             pid = fname
+        img.shape+=(1,)
         yield img, pid
 
 def load_label_df(filename='stage1_labels.csv'):
@@ -90,7 +88,7 @@ class DCMReader(object):
         self.coord = coord
         self.e2e = e2e
         self.threshold = threshold
-        self.corpus_size = get_corpus_size(self.data_dir)
+        self.corpus_size = get_corpus_size(self.data_dir, pattern='*.npy')
         self.threads = []
         self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
         self.label_placeholder = tf.placeholder(dtype=tf.int32, shape=[], name='label') #!!!
