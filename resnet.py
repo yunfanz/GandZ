@@ -76,15 +76,13 @@ class RESNET(object):
             assert self.c['stack_stride'] == 2
             x = stack(x, self.c, self.dim)
 
-        with tf.variable_scope('scale4'):
-            self.c['num_blocks'] = self.num_blocks[2]
-            self.c['block_filters_internal'] = self.num_chans[3]
-            x = stack(x, self.c, self.dim)
+        for i in range(3,self.num_scales):
+            name = 'scale'+str(i+1)
+            with tf.variable_scope(name):
+                self.c['num_blocks'] = self.num_blocks[i-1]
+                self.c['block_filters_internal'] = self.num_chans[i]
+                x = stack(x, self.c, self.dim)
 
-        with tf.variable_scope('scale5'):
-            self.c['num_blocks'] = self.num_blocks[3]
-            self.c['block_filters_internal'] = self.num_chans[4]
-            x = stack(x, self.c, self.dim)
 
         # post-net
         if self.dim==2:

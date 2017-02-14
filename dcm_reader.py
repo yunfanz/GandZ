@@ -29,7 +29,7 @@ def find_files(directory, pattern='*.dcm'):
 
 def get_image_e2e(slices):
     image = get_pixels_hu(slices)
-    #image, new_spacing = resample(image, slices, [1,1,1])
+    image, new_spacing = resample(image, slices, [1,1,1])
     segmented_mask_fill = segment_lung_mask(image, True)
     image = image*segmented_mask_fill
     image = zero_center(normalize(image))
