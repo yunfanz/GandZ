@@ -7,11 +7,11 @@ from preprocess import *
 from joblib import Parallel, delayed
 
 SP2_BOX = (210, 180, 210)
-CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
-TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
+#CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
+#TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_noseg/train/'
 MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
-#CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
-#TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
+CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
+TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
 #MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 	print('id, nslices, shape, max, min ')
@@ -71,45 +71,52 @@ def convert_patient_dcm(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_di
     print(pid, 'processed')
     return 0
 
-def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None, bbox=False):
+def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None, bbox=False, segment=False):
     '''Generator that yields pixel_array from dataset, and
     additionally the ID of the corresponding patient.'''
     #print('targetdir', target_dir)
     #print('mask_dir', mask_dir)
-    assert os.path.exists(target_dir) and os.path.exists(mask_dir)
+    assert os.path.exists(target_dir) 
+
     # if os.path.exists(target_dir+pid+'.npy'):
     #     print('file', pid, 'exists, skipping.')
     #     return
-    
+    if not os.path.exists(data_dir+pid):
+        print('no', pid)
+        return
     slices = load_scan(data_dir+pid)
     image = get_pixels_hu(slices)
     image, new_spacing = resample(image, slices, [2,2,2])
-    try:
-        mask = np.vstack([np.expand_dims(watershed_seg_2d(zslice,mode='f_only'),axis=0) for zslice in image])
-        #mask = watershed_seg_3d(image, mode='f_only')
-    except:
-        print('ERROR Processing', pid)
-        return
-    img = image*mask
-    #segmented_mask_fill = segment_lung_mask(image, True)
-    #mask, _ = resample(water_seg, slices, [2,2,2])
-    # img, _ = resample(img, slices, [2,2,2])
-    #mask = ndimage.binary_dilation(water_seg, iterations=1)
-    #img = img*mask
-    img = zero_center(normalize(img))
-    img = img.astype('float32')
-    mask = mask.astype('int8')
+    if segment:
+        assert os.path.exists(mask_dir)
+        try:
+            mask = np.vstack([np.expand_dims(watershed_seg_2d(zslice,mode='f_only'),axis=0) for zslice in image])
+            #mask = watershed_seg_3d(image, mode='f_only')
+        except:
+            print('ERROR Processing', pid)
+            return
+        image = image*mask
+        mask = mask.astype('int8')
+        if mask_dir:
+            mfname = mask_dir+'mask_'+pid+'.npy'
+            np.save(mfname, mask)
+        #segmented_mask_fill = segment_lung_mask(image, True)
+        #mask, _ = resample(water_seg, slices, [2,2,2])
+        # img, _ = resample(img, slices, [2,2,2])
+        #mask = ndimage.binary_dilation(water_seg, iterations=1)
+        #img = img*mask
+    image = zero_center(normalize(image))
+    image = image.astype('float32')
+    
     
     if bbox:
         zmin, zmax, rmin, rmax, cmin, cmax = bbox_3d(mask)
-        img = img[zmin:zmax,rmin:rmax,cmin:cmax]
+        image = image[zmin:zmax,rmin:rmax,cmin:cmax]
         #mask = mask[zmin:zmax,rmin:rmax,cmin:cmax]
     filename =  target_dir+pid+'.npy'
     
-    if mask_dir:
-        mfname = mask_dir+'mask_'+pid+'.npy'
-        np.save(mfname, mask)
-    np.save(filename, img)
+    
+    np.save(filename, image)
     print(pid, 'processed')
     return 0
 
@@ -180,12 +187,15 @@ if __name__=='__main__':
     #for patient_dir in os.listdir(CORPUS_DIR):
     #convert_patient_dcm('0015ceb851d7251b8f399e39779d1e7d')
 
-    #df = pd.DataFrame.from_csv('stage1_labels.csv')
+    df = pd.DataFrame.from_csv('stage1_labels.csv')
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
-    #PIDL = df.index.tolist()
-    to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
-    from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
-    PIDL = os.listdir(from_dir)
-    Parallel(n_jobs=12)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
+    PIDL = df.index.tolist()
+    Parallel(n_jobs=4)(delayed(test_convert)(pid) for pid in PIDL)
+
+
+    # to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
+    # from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
+    # PIDL = os.listdir(from_dir)
+    #Parallel(n_jobs=12)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
 
 
