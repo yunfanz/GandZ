@@ -6,6 +6,7 @@ from scipy import ndimage
 from preprocess import *
 from joblib import Parallel, delayed
 
+SP2_BOX = (210, 180, 210)
 CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
 TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
 MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
@@ -76,12 +77,19 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
     #print('targetdir', target_dir)
     #print('mask_dir', mask_dir)
     assert os.path.exists(target_dir) and os.path.exists(mask_dir)
+    # if os.path.exists(target_dir+pid+'.npy'):
+    #     print('file', pid, 'exists, skipping.')
+    #     return
     
     slices = load_scan(data_dir+pid)
     image = get_pixels_hu(slices)
     image, new_spacing = resample(image, slices, [2,2,2])
-    #mask = np.vstack([np.expand_dims(watershed_seg_2d(zslice,mode='f_only'),axis=0) for zslice in image])
-    mask = watershed_seg_3d(image, mode='f_only')
+    try:
+        mask = np.vstack([np.expand_dims(watershed_seg_2d(zslice,mode='f_only'),axis=0) for zslice in image])
+        #mask = watershed_seg_3d(image, mode='f_only')
+    except:
+        print('ERROR Processing', pid)
+        return
     img = image*mask
     #segmented_mask_fill = segment_lung_mask(image, True)
     #mask, _ = resample(water_seg, slices, [2,2,2])
@@ -138,6 +146,32 @@ def get_box_sizes(path=MASK_DIR, mode='pandas', verbose=False):
         boxes = np.array(boxes)
     return boxes
 
+def apply_bbox(data_dir, target_dir, mask_dir=MASK_DIR, pid=None, sizes=SP2_BOX):
+    if pid:
+        if pid.endswith('.npy'):
+            pid = pid.split('.')[0]
+        try:
+            img = np.load(data_dir+pid+'.npy')
+            mask = np.load(mask_dir+'mask_'+pid+'.npy')
+        except:
+            print(pid, 'does not exist')
+            return
+        hs = [s//2 for s in sizes]
+        val = img[0,0,0]
+        #print('padding with', val)
+        img = np.pad(img,((hs[0], hs[0]),(hs[1],hs[1]), (hs[2],hs[2])), mode='constant', constant_values=val )
+        mask = np.pad(mask,((hs[0], hs[0]),(hs[1],hs[1]), (hs[2],hs[2])), mode='constant', constant_values=0 )
+        center2,_ = corner_to_center_and_size(*bbox_3d(mask))
+        z1,r1,c1 = (center2[0]-sizes[0])//2,(center2[1]-sizes[1])//2,(center2[2]-sizes[2])//2
+        z2,r2,c2 = (center2[0]+sizes[0])//2,(center2[1]+sizes[1])//2,(center2[2]+sizes[2])//2
+        img = img[z1:z2, r1:r2, c1:c2]
+        np.save(target_dir+pid+'.npy', img)
+        return
+    else:    
+        for fname in os.listdir(data_dir):
+            pid = fname.split('.')[0]
+            apply_bbox(data_dir,mask_dir,target_dir,pid=pid, sizes=sizes)
+
 
 
 if __name__=='__main__':
@@ -146,8 +180,12 @@ if __name__=='__main__':
     #for patient_dir in os.listdir(CORPUS_DIR):
     #convert_patient_dcm('0015ceb851d7251b8f399e39779d1e7d')
 
-    df = pd.DataFrame.from_csv('stage1_labels.csv')
+    #df = pd.DataFrame.from_csv('stage1_labels.csv')
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
-    PIDL = df.index.tolist()
-    #PIDL = os.listdir(CORPUS_DIR)
-    Parallel(n_jobs=16)(delayed(test_convert)(pid, mask_dir=MASK_DIR) for pid in PIDL)
+    #PIDL = df.index.tolist()
+    to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
+    from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
+    PIDL = os.listdir(from_dir)
+    Parallel(n_jobs=12)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
+
+

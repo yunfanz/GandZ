@@ -5,14 +5,13 @@ import numpy as np
 import os
 import time
 MOMENTUM = 0.9
-
+SP2_BOX = (210,180,210,1)
 FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './tmp/resnet_train/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_string('data_dir', '/data2/Kaggle/LungCan/stage1/',
-                           """Directory where to write event logs """
-                           """and checkpoint.""")
+tf.app.flags.DEFINE_string('data_dir', 'DATA/train/',
+                           """Directory where data is located""")
 tf.app.flags.DEFINE_float('learning_rate', 0.01, "learning rate.")
 tf.app.flags.DEFINE_integer('batch_size', 1, "batch size")
 tf.app.flags.DEFINE_integer('num_per_epoch', None, "max steps per epoch")
@@ -33,6 +32,9 @@ def hack_final_block(logits):
     return
     
 def train(sess, net, is_training):
+
+    if not os.path.exists(FLAGS.train_dir):
+        os.makedirs(FLAGS.train_dir)
     
     coord = tf.train.Coordinator()
     reader = load_dcm(coord, FLAGS.data_dir)
@@ -177,8 +179,9 @@ def load_dcm(coord, data_dir):
         data_dir,
         coord,
         e2e=True,
-        queue_size=16, 
-        byPatient=True)
+        queue_size=32, 
+        byPatient=True, 
+        q_shape=SP2_BOX)
     return reader
 
 
@@ -193,8 +196,8 @@ def main(_):
     net = RESNET(sess, 
                 dim=3,
                 num_classes=2,
-                num_blocks=[3, 4, 3],  # defaults to 50-layer network
-                num_chans=[16,16,32,64],
+                num_blocks=[3, 4, 6, 3],  # first chan is not a block
+                num_chans=[32,32,64,128,128],
                 use_bias=False, # defaults to using batch norm
                 bottleneck=True,
                 is_training=True)

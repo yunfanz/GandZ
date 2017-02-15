@@ -84,6 +84,7 @@ class DCMReader(object):
                  threshold=None,
                  queue_size=16, 
                  byPatient=True,
+                 q_shape=None,
                  pattern='*.npy'):
         self.data_dir = data_dir
         self.coord = coord
@@ -94,10 +95,13 @@ class DCMReader(object):
         self.threads = []
         self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
         self.label_placeholder = tf.placeholder(dtype=tf.int32, shape=[], name='label') #!!!
-        self.q_shape = [(None, None, None, 1)] if byPatient else [(None, None, 1)]
-        self.queue = tf.PaddingFIFOQueue(queue_size,
-                                         ['float32'],
-                                         shapes=self.q_shape)
+        if q_shape:
+            self.queue = tf.FIFOQueue(queue_size,['float32'], shapes=q_shape)
+        else:
+            self.q_shape = [(None, None, None, 1)] if byPatient else [(None, None, 1)]
+            self.queue = tf.PaddingFIFOQueue(queue_size,
+                                             ['float32'],
+                                             shapes=self.q_shape)
         self.enqueue = self.queue.enqueue([self.sample_placeholder])
         self.queue_l = tf.FIFOQueue(queue_size,
                                          'int32',
