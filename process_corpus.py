@@ -7,11 +7,11 @@ from preprocess import *
 from joblib import Parallel, delayed
 
 SP2_BOX = (210, 180, 210)
-#CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
-#TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_noseg/train/'
+CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
+TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_noseg/test/'
 MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
-CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
-TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
+#CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
+#TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
 #MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 	print('id, nslices, shape, max, min ')
@@ -105,7 +105,7 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
         # img, _ = resample(img, slices, [2,2,2])
         #mask = ndimage.binary_dilation(water_seg, iterations=1)
         #img = img*mask
-    image = zero_center(normalize(image))
+    image = zero_center(normalize(image),mean=0.5)
     image = image.astype('float32')
     
     
@@ -164,7 +164,7 @@ def apply_bbox(data_dir, target_dir, mask_dir=MASK_DIR, pid=None, sizes=SP2_BOX)
             print(pid, 'does not exist')
             return
         hs = [s//2 for s in sizes]
-        val = img[0,0,0]
+        val = -0.25 #img[0,0,0]
         #print('padding with', val)
         img = np.pad(img,((hs[0], hs[0]),(hs[1],hs[1]), (hs[2],hs[2])), mode='constant', constant_values=val )
         mask = np.pad(mask,((hs[0], hs[0]),(hs[1],hs[1]), (hs[2],hs[2])), mode='constant', constant_values=0 )
@@ -172,7 +172,8 @@ def apply_bbox(data_dir, target_dir, mask_dir=MASK_DIR, pid=None, sizes=SP2_BOX)
         z1,r1,c1 = (center2[0]-sizes[0])//2,(center2[1]-sizes[1])//2,(center2[2]-sizes[2])//2
         z2,r2,c2 = (center2[0]+sizes[0])//2,(center2[1]+sizes[1])//2,(center2[2]+sizes[2])//2
         img = img[z1:z2, r1:r2, c1:c2]
-        np.save(target_dir+pid+'.npy', img)
+        np.save(target_dir+pid+'.npy', img); 
+        print(pid, 'processed')
         return
     else:    
         for fname in os.listdir(data_dir):
@@ -187,15 +188,15 @@ if __name__=='__main__':
     #for patient_dir in os.listdir(CORPUS_DIR):
     #convert_patient_dcm('0015ceb851d7251b8f399e39779d1e7d')
 
-    df = pd.DataFrame.from_csv('stage1_labels.csv')
+    #df = pd.DataFrame.from_csv('stage1_labels.csv')
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
-    PIDL = df.index.tolist()
-    Parallel(n_jobs=4)(delayed(test_convert)(pid) for pid in PIDL)
+    #PIDL = df.index.tolist()
+    #Parallel(n_jobs=8)(delayed(test_convert)(pid) for pid in PIDL)
 
 
-    # to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
-    # from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
-    # PIDL = os.listdir(from_dir)
-    #Parallel(n_jobs=12)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
+    to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
+    from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_noseg/train/'
+    PIDL = os.listdir(from_dir)
+    Parallel(n_jobs=12)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
 
 

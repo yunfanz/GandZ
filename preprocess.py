@@ -10,7 +10,7 @@ PIXEL_MEAN = 0.25
 MIN_BOUND = -1000.0
 MAX_BOUND = 400.0
 
-def zero_center(image):
+def zero_center(image, mean=PIXEL_MEAN):
     image = image - PIXEL_MEAN
     return image
 def normalize(image):
