@@ -96,24 +96,19 @@ class DCMReader(object):
         self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
         self.label_placeholder = tf.placeholder(dtype=tf.int32, shape=[], name='label') #!!!
         if q_shape:
-            self.queue = tf.FIFOQueue(queue_size,['float32'], shapes=q_shape)
+            self.queue = tf.FIFOQueue(queue_size,[tf.float32,tf.int32], shapes=[q_shape,[]])
         else:
             self.q_shape = [(None, None, None, 1)] if byPatient else [(None, None, 1)]
             self.queue = tf.PaddingFIFOQueue(queue_size,
-                                             ['float32'],
-                                             shapes=self.q_shape)
-        self.enqueue = self.queue.enqueue([self.sample_placeholder])
-        self.queue_l = tf.FIFOQueue(queue_size,
-                                         'int32',
-                                         shapes=[])
-        self.enqueue_l = self.queue_l.enqueue([self.label_placeholder])
+                                             [tf.float32, tf.int32],
+                                             shapes=[self.q_shape,[]])
+        self.enqueue = self.queue.enqueue([self.sample_placeholder, self.label_placeholder])
         self.byPatient = byPatient
         self.labels_df = load_label_df()
 
     def dequeue(self, num_elements):
-        output = self.queue.dequeue_many(num_elements)
-        labels = self.queue_l.dequeue_many(num_elements)
-        return output, labels
+        images, labels = self.queue.dequeue_many(num_elements)
+        return images, labels
 
     def thread_main(self, sess):
         buffer_ = np.array([])
@@ -140,10 +135,8 @@ class DCMReader(object):
 
                 else:
                     sess.run(self.enqueue,
-                             feed_dict={self.sample_placeholder: img})
-                    sess.run(self.enqueue_l,
-                             feed_dict={self.label_placeholder: label})
-
+                             feed_dict={self.sample_placeholder: img, self.label_placeholder: label})
+                    
     def start_threads(self, sess, n_threads=1):
         for _ in range(n_threads):
             thread = threading.Thread(target=self.thread_main, args=(sess,))
