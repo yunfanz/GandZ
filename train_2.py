@@ -28,9 +28,94 @@ def top_k_error(predictions, labels, k):
     num_correct = tf.reduce_sum(in_top1)
     return (batch_size - num_correct) / batch_size
     #return num_correct
-def hack_final_block(logits):
-    return
+def test(sess, net, is_training, validation=False):
+
+    if not os.path.exists(FLAGS.train_dir):
+        os.makedirs(FLAGS.train_dir)
     
+    coord = tf.train.Coordinator()
+    reader = load_dcm(coord, FLAGS.data_dir)
+    corpus_size = reader.corpus_size
+    #import IPython; IPython.embed()
+    batch, labels = reader.dequeue(FLAGS.batch_size)
+    global_step = tf.get_variable('global_step', [],
+                                  initializer=tf.constant_initializer(0),
+                                  trainable=False)
+    val_step = tf.get_variable('val_step', [],
+                                  initializer=tf.constant_initializer(0),
+                                  trainable=False)
+
+
+    logits = net.inference(batch)
+    #loss_ = net.loss(logits, labels)
+    predictions = tf.nn.softmax(logits)
+    #import IPython; IPython.embed()
+    #top1_error = top_k_error(predictions, labels, 1)
+
+    saver = tf.train.Saver(tf.all_variables())
+
+    summary_op = tf.merge_all_summaries()
+
+    init = tf.initialize_all_variables()
+    #import IPython; IPython.embed()
+    sess.run(init)
+
+    summary_writer = tf.train.SummaryWriter(FLAGS.train_dir, sess.graph)
+
+    if FLAGS.resume:
+        latest = tf.train.latest_checkpoint(FLAGS.train_dir)
+        if not latest:
+            print("No checkpoint to continue from in", FLAGS.train_dir)
+            sys.exit(1)
+        print("resume", latest)
+        saver.restore(sess, latest)
+
+    
+    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+    reader.start_threads(sess)
+    try:
+        if FLAGS.num_per_epoch:
+            batch_idx = min(FLAGS.num_per_epoch, corpus_size) // FLAGS.batch_size
+        else:
+            batch_idx = corpus_size // FLAGS.batch_size
+        for idx in range(batch_idx):
+            start_time = time.time()
+            step = sess.run(global_step)
+
+            o = sess.run(i, { is_training: True })
+
+            loss_value = o[1]
+
+            duration = time.time() - start_time
+
+            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
+
+            if step % 1 == 0:
+                examples_per_sec = FLAGS.batch_size / float(duration)
+                format_str = ('Epoch %d, [%d / %d], loss = %.2f (%.1f examples/sec; %.3f '
+                              'sec/batch)')
+                print(format_str % (epoch, idx, batch_idx, loss_value, examples_per_sec, duration))
+
+            if write_summary:
+                summary_str = o[2]
+                summary_writer.add_summary(summary_str, step)
+
+            _, top1_error_value = sess.run([val_op, top1_error], { is_training: False })
+            #pp, ll = sess.run([predictions, labels], {is_training:False})
+            #print('Predictions: ', pp)
+            #print('labels: ', ll)
+            print('Validation top1 error %.2f' % top1_error_value)
+
+    except KeyboardInterrupt:
+        # Introduce a line break after ^C is displayed so save message
+        # is on its own line.
+        print()
+        #G
+    finally:
+        print('Finished, output see {}'.format(FLAGS.train_dir))
+        coord.request_stop()
+        coord.join(threads)
+
 def train(sess, net, is_training):
 
     if not os.path.exists(FLAGS.train_dir):
@@ -67,14 +152,16 @@ def train(sess, net, is_training):
     tf.scalar_summary('loss_avg', ema.average(loss_))
 
     # validation stats
-    ema = tf.train.ExponentialMovingAverage(0.9, val_step)
+    ema = tf.train.ExponentialMovingAverage(0.99, val_step)
     val_op = tf.group(val_step.assign_add(1), ema.apply([top1_error]))
     top1_error_avg = ema.average(top1_error)
     tf.scalar_summary('val_top1_error_avg', top1_error_avg)
 
     tf.scalar_summary('learning_rate', FLAGS.learning_rate)
-
-    opt = tf.train.MomentumOptimizer(FLAGS.learning_rate, MOMENTUM)
+    ###
+    #opt = tf.train.MomentumOptimizer(FLAGS.learning_rate, MOMENTUM)
+    opt = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate, beta1=0.5, beta2=0.999, epsilon=1e-1)
+    ###
     grads = opt.compute_gradients(loss_)
     for grad, var in grads:
         if grad is not None and not FLAGS.minimal_summaries:
@@ -108,7 +195,7 @@ def train(sess, net, is_training):
             print("No checkpoint to continue from in", FLAGS.train_dir)
             sys.exit(1)
         print("resume", latest)
-        saver.restore(self.sess, latest)
+        saver.restore(sess, latest)
 
     
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
@@ -153,11 +240,11 @@ def train(sess, net, is_training):
                     saver.save(sess, checkpoint_path, global_step=global_step)
 
                 # Run validation periodically
-                if step > 1 and step % 100 == 0:
+                if step > 1 and step % 10 == 0:
                     _, top1_error_value = sess.run([val_op, top1_error], { is_training: False })
-                    pp, ll = sess.run([predictions, labels], {is_training:False})
-                    print('Predictions: ', pp)
-                    print('labels: ', ll)
+                    #pp, ll = sess.run([predictions, labels], {is_training:False})
+                    #print('Predictions: ', pp)
+                    #print('labels: ', ll)
                     print('Validation top1 error %.2f' % top1_error_value)
 
     except KeyboardInterrupt:
@@ -172,7 +259,7 @@ def train(sess, net, is_training):
 
 def load_dcm(coord, data_dir):
     if not data_dir:
-        data_dir = os.path.join("/data2/Kaggle/Lungcan/", 'stage1/')
+        data_dir = './DATA/train/'
     print('Using data_dir', data_dir)
 
     reader = DCMReader(
@@ -181,7 +268,8 @@ def load_dcm(coord, data_dir):
         e2e=True,
         queue_size=32, 
         byPatient=True, 
-        q_shape=SP2_BOX)
+        q_shape=SP2_BOX, 
+        n_threads=1)
     return reader
 
 

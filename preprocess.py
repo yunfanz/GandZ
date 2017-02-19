@@ -19,10 +19,13 @@ def normalize(image):
     image[image<0] = 0.
     return image
 
-def load_scan(path, single_file=False):
+def load_scan(path, single_file=False, min_slices=20):
     if single_file:
         return [dicom.read_file(path)]
-    slices = [dicom.read_file(path + '/' + s) for s in os.listdir(path)]
+    elif len(os.listdir(path))<min_slices:
+        print('Too few slices, skipping', path)
+        return
+    slices = [dicom.read_file(path + '/' + s) for s in os.listdir(path) if s.endswith('.dcm')]
     slices.sort(key = lambda x: float(x.ImagePositionPatient[2]))
     try:
         slice_thickness = np.abs(float(slices[0].ImagePositionPatient[2]) - float(slices[1].ImagePositionPatient[2]))
@@ -145,8 +148,9 @@ def _watershed_markers(image):
     if len(areas) > 2:
         for region in measure.regionprops(marker_internal_labels):
             if region.area < areas[-2]:
-                for coordinates in region.coords:                
-                       marker_internal_labels[coordinates[0], coordinates[1]] = 0
+                marker_internal_labels[np.where(region.image)] = 0
+                # for coordinates in region.coords:                
+                #        marker_internal_labels[coordinates[0], coordinates[1]] = 0
     marker_internal = marker_internal_labels > 0
     #Creation of the external Marker
     external_a = ndimage.binary_dilation(marker_internal, iterations=10)
@@ -209,19 +213,25 @@ def watershed_seg_2d(image, mode='f_only'):
 
 def _apply_func_3d(func, arr):
     return np.vstack([np.expand_dims(func(ar), axis=0) for ar in arr])
-
+def _clear_border_3d(image):
+    image[0] = 0; image[-1] = 0;
+    image[:,0,:] = 0; image[:,-1.:] = 0;
+    image[:,:,0] = 0; image[:,:,-1] = 0;
+    return image
 def _watershed_markers_3d(image):
     #Creation of the internal Marker
     marker_internal = image < -400
-    marker_internal = _apply_func_3d(segmentation.clear_border, marker_internal)
+    marker_internal = _clear_border_3d(marker_internal)
+    #marker_internal = _apply_func_3d(segmentation.clear_border, marker_internal)
     marker_internal_labels = measure.label(marker_internal)
     areas = [r.area for r in measure.regionprops(marker_internal_labels)]
     areas.sort()
-    if len(areas) > 2:
+    if len(areas) > 1:
         for region in measure.regionprops(marker_internal_labels):
-            if region.area < areas[-2]:
-                for coordinates in region.coords:                
-                       marker_internal_labels[coordinates[0], coordinates[1]] = 0
+            if region.area < areas[-1]:
+                marker_internal_labels[np.where(region.image)] = 0
+                # for coordinates in region.coords:                
+                #        marker_internal_labels[coordinates[0], coordinates[1], coordinates[2]] = 0
     marker_internal = marker_internal_labels > 0
     #Creation of the external Marker
     external_a = ndimage.binary_dilation(marker_internal, iterations=10)
@@ -240,9 +250,10 @@ def watershed_seg_3d(image, mode='f_only'):
     marker_internal, marker_external, marker_watershed = _watershed_markers_3d(image)
     
     #Creation of the Sobel-Gradient
+    sobel_filtered_dz = ndimage.sobel(image, 0)
     sobel_filtered_dx = ndimage.sobel(image, 1)
-    sobel_filtered_dy = ndimage.sobel(image, 0)
-    sobel_gradient = np.hypot(sobel_filtered_dx, sobel_filtered_dy)
+    sobel_filtered_dy = ndimage.sobel(image, 2)
+    sobel_gradient = np.sqrt(sobel_filtered_dx**2+sobel_filtered_dy**2+sobel_filtered_dz**2)
     sobel_gradient *= 255.0 / np.max(sobel_gradient)
     
     #Watershed algorithm

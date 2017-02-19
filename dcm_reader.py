@@ -85,9 +85,11 @@ class DCMReader(object):
                  queue_size=16, 
                  byPatient=True,
                  q_shape=None,
-                 pattern='*.npy'):
+                 pattern='*.npy', 
+                 n_threads=1):
         self.data_dir = data_dir
         self.coord = coord
+        self.n_threads = n_threads
         self.e2e = e2e
         self.threshold = threshold
         self.ftype = pattern
@@ -137,8 +139,8 @@ class DCMReader(object):
                     sess.run(self.enqueue,
                              feed_dict={self.sample_placeholder: img, self.label_placeholder: label})
                     
-    def start_threads(self, sess, n_threads=1):
-        for _ in range(n_threads):
+    def start_threads(self, sess):
+        for _ in range(self.n_threads):
             thread = threading.Thread(target=self.thread_main, args=(sess,))
             thread.daemon = True  # Thread will close when parent quits.
             thread.start()

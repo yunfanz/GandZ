@@ -8,7 +8,7 @@ from joblib import Parallel, delayed
 
 SP2_BOX = (210, 180, 210)
 CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
-TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_noseg/test/'
+TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train_3dalg/'
 MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
 #CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
 #TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
@@ -90,8 +90,8 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
     if segment:
         assert os.path.exists(mask_dir)
         try:
-            mask = np.vstack([np.expand_dims(watershed_seg_2d(zslice,mode='f_only'),axis=0) for zslice in image])
-            #mask = watershed_seg_3d(image, mode='f_only')
+            #mask = np.vstack([np.expand_dims(watershed_seg_2d(zslice,mode='f_only'),axis=0) for zslice in image])
+            mask = watershed_seg_3d(image, mode='f_only')
         except:
             print('ERROR Processing', pid)
             return
@@ -188,15 +188,16 @@ if __name__=='__main__':
     #for patient_dir in os.listdir(CORPUS_DIR):
     #convert_patient_dcm('0015ceb851d7251b8f399e39779d1e7d')
 
-    #df = pd.DataFrame.from_csv('stage1_labels.csv')
+    df = pd.DataFrame.from_csv('stage1_labels.csv')
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
-    #PIDL = df.index.tolist()
-    #Parallel(n_jobs=8)(delayed(test_convert)(pid) for pid in PIDL)
+    PIDL = df.index.tolist()
+    Parallel(n_jobs=4)(delayed(test_convert)(pid) for pid in PIDL)
 
 
-    to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
-    from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_noseg/train/'
-    PIDL = os.listdir(from_dir)
-    Parallel(n_jobs=12)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
+    #to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
+    # to_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
+    # from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
+    # PIDL = os.listdir(from_dir)
+    # Parallel(n_jobs=4)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
 
 
