@@ -139,7 +139,8 @@ def segment_lung_mask(image, fill_lung_structures=True):
 
 
 def _watershed_markers(image):
-    #Creation of the internal Marker
+
+
     marker_internal = image < -400
     marker_internal = segmentation.clear_border(marker_internal)
     marker_internal_labels = measure.label(marker_internal)
@@ -215,10 +216,19 @@ def _apply_func_3d(func, arr):
     return np.vstack([np.expand_dims(func(ar), axis=0) for ar in arr])
 def _clear_border_3d(image):
     image[0] = 0; image[-1] = 0;
-    image[:,0,:] = 0; image[:,-1.:] = 0;
+    image[:,0,:] = 0; image[:,-1,:] = 0;
     image[:,:,0] = 0; image[:,:,-1] = 0;
     return image
 def _watershed_markers_3d(image):
+    
+    #Creation of the internal Marker
+    binary_image = np.array(image > -320, dtype=np.int8)+1
+    labels = measure.label(binary_image)
+    background_label = labels[0,0,0]
+    #Fill the air around the person
+    image[background_label == labels] = 0
+
+
     #Creation of the internal Marker
     marker_internal = image < -400
     marker_internal = _clear_border_3d(marker_internal)
@@ -229,13 +239,16 @@ def _watershed_markers_3d(image):
     if len(areas) > 1:
         for region in measure.regionprops(marker_internal_labels):
             if region.area < areas[-1]:
-                marker_internal_labels[np.where(region.image)] = 0
+                #marker_internal_labels[np.where(region.image)] = 0
+                coords = region.coords.T
+                marker_internal_labels[coords[0], coords[1], coords[2]] = 0
                 # for coordinates in region.coords:                
                 #        marker_internal_labels[coordinates[0], coordinates[1], coordinates[2]] = 0
     marker_internal = marker_internal_labels > 0
     #Creation of the external Marker
-    external_a = ndimage.binary_dilation(marker_internal, iterations=10)
-    external_b = ndimage.binary_dilation(marker_internal, iterations=55)
+    # This values should be adjusted depending on the size of the output
+    external_a = ndimage.binary_dilation(marker_internal, iterations=1)
+    external_b = ndimage.binary_dilation(marker_internal, iterations=10)
     marker_external = external_b ^ external_a
     #Creation of the Watershed Marker matrix
     #marker_watershed = np.zeros((512, 512), dtype=np.int)
@@ -248,7 +261,7 @@ def _watershed_markers_3d(image):
 def watershed_seg_3d(image, mode='f_only'):
     #Creation of the markers as shown above:
     marker_internal, marker_external, marker_watershed = _watershed_markers_3d(image)
-    
+    #import IPython; IPython.embed()
     #Creation of the Sobel-Gradient
     sobel_filtered_dz = ndimage.sobel(image, 0)
     sobel_filtered_dx = ndimage.sobel(image, 1)

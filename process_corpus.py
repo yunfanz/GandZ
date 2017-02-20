@@ -8,11 +8,14 @@ from joblib import Parallel, delayed
 
 SP2_BOX = (210, 180, 210)
 CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
-TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train_3dalg/'
+TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
 MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
-#CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
-#TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
-#MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp1_morphseg/masks/'
+# CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/corpus/'
+# TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/train/'
+# MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/masks/'
+# CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
+# TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/sp2_waterseg/train/'
+# MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/sp2_waterseg/masks/'
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 	print('id, nslices, shape, max, min ')
 	for subpath in os.listdir(path):
@@ -86,9 +89,14 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
         return
     slices = load_scan(data_dir+pid)
     image = get_pixels_hu(slices)
-    image, new_spacing = resample(image, slices, [2,2,2])
+
+    # except:
+
+    # image, new_spacing = resample(image, slices, [2,2,2])
     if segment:
         assert os.path.exists(mask_dir)
+        if not image[0,0,0] < -400:
+            print(pid, 'not segmented correctly, structure exists on corner. ')
         try:
             #mask = np.vstack([np.expand_dims(watershed_seg_2d(zslice,mode='f_only'),axis=0) for zslice in image])
             mask = watershed_seg_3d(image, mode='f_only')
@@ -105,7 +113,9 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
         # img, _ = resample(img, slices, [2,2,2])
         #mask = ndimage.binary_dilation(water_seg, iterations=1)
         #img = img*mask
-    image = zero_center(normalize(image),mean=0.5)
+    image, new_spacing = resample(image, slices, [2,2,2])
+    image = normalize(image)
+    #image = zero_center(normalize(image),mean=0.5)
     image = image.astype('float32')
     
     
@@ -191,7 +201,8 @@ if __name__=='__main__':
     df = pd.DataFrame.from_csv('stage1_labels.csv')
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
     PIDL = df.index.tolist()
-    Parallel(n_jobs=4)(delayed(test_convert)(pid) for pid in PIDL)
+    # PIDL = os.listdir(CORPUS_DIR)
+    Parallel(n_jobs=4)(delayed(test_convert)(pid, mask_dir=MASK_DIR, segment=True) for pid in PIDL)
 
 
     #to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
