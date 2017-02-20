@@ -14,8 +14,8 @@ MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
 # TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/train/'
 # MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/masks/'
 # CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
-# TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/sp2_waterseg/train/'
-# MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/sp2_waterseg/masks/'
+# TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
+# MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 	print('id, nslices, shape, max, min ')
 	for subpath in os.listdir(path):
