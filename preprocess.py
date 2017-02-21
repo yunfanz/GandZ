@@ -13,11 +13,14 @@ MAX_BOUND = 400.0
 def zero_center(image, mean=PIXEL_MEAN):
     image = image - PIXEL_MEAN
     return image
-def normalize(image):
+def normalize(image, mask=None):
     image = (image - MIN_BOUND) / (MAX_BOUND - MIN_BOUND)
     image[image>1] = 1.
     image[image<0] = 0.
-    return image
+    if mask is None:
+        return image
+    else: 
+        return image*mask
 
 def load_scan(path, single_file=False, min_slices=20):
     if single_file:
@@ -248,7 +251,8 @@ def _watershed_markers_3d(image):
     #Creation of the external Marker
     # This values should be adjusted depending on the size of the output
     external_a = ndimage.binary_dilation(marker_internal, iterations=1)
-    external_b = ndimage.binary_dilation(marker_internal, iterations=10)
+    #external_a = marker_internal
+    external_b = ndimage.binary_dilation(marker_internal, iterations=15)
     marker_external = external_b ^ external_a
     #Creation of the Watershed Marker matrix
     #marker_watershed = np.zeros((512, 512), dtype=np.int)
@@ -290,7 +294,7 @@ def watershed_seg_3d(image, mode='f_only'):
     lungfilter = np.bitwise_or(marker_internal, outline)
     #Close holes in the lungfilter
     #fill_holes is not used here, since in some slices the heart would be reincluded by accident
-    lungfilter = ndimage.morphology.binary_closing(lungfilter, structure=np.ones((5,5,5)), iterations=3)
+    lungfilter = ndimage.morphology.binary_closing(lungfilter, structure=np.ones((3,3,3)), iterations=3)
     
     #Apply the lungfilter (note the filtered areas being assigned -2000 HU)
     segmented = np.where(lungfilter == 1, image, -2000*np.ones_like(image))

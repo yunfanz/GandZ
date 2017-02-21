@@ -7,15 +7,15 @@ from preprocess import *
 from joblib import Parallel, delayed
 
 SP2_BOX = (210, 180, 210)
-CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
-TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
-MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
+# CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
+# TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
+# MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
 # CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/corpus/'
 # TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/train/'
 # MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/masks/'
-# CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
-# TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
-# MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
+CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
+TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
+MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 	print('id, nslices, shape, max, min ')
 	for subpath in os.listdir(path):
@@ -92,7 +92,7 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
 
     # except:
 
-    # image, new_spacing = resample(image, slices, [2,2,2])
+    image, new_spacing = resample(image, slices, [2,2,2])
     if segment:
         assert os.path.exists(mask_dir)
         if not image[0,0,0] < -400:
@@ -113,8 +113,8 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
         # img, _ = resample(img, slices, [2,2,2])
         #mask = ndimage.binary_dilation(water_seg, iterations=1)
         #img = img*mask
-    image, new_spacing = resample(image, slices, [2,2,2])
-    image = normalize(image)
+    # image, new_spacing = resample(image, slices, [2,2,2])
+    image = normalize(image, mask=mask)
     #image = zero_center(normalize(image),mean=0.5)
     image = image.astype('float32')
     
@@ -163,6 +163,17 @@ def get_box_sizes(path=MASK_DIR, mode='pandas', verbose=False):
         boxes = np.array(boxes)
     return boxes
 
+def plot_box_dims(boxes):
+    import pylab as plt
+    plt.figure()
+    zdim = (boxes['zmax']-boxes['zmin']).as_matrix()
+    rdim = (boxes['rmax']-boxes['rmin']).as_matrix()
+    cdim = (boxes['cmax']-boxes['cmin']).as_matrix()
+    plt.plot(zdim, label='z')
+    plt.plot(rdim, label='r')
+    plt.plot(cdim, label='c')
+    plt.legend()
+
 def apply_bbox(data_dir, target_dir, mask_dir=MASK_DIR, pid=None, sizes=SP2_BOX):
     if pid:
         if pid.endswith('.npy'):
@@ -198,10 +209,10 @@ if __name__=='__main__':
     #for patient_dir in os.listdir(CORPUS_DIR):
     #convert_patient_dcm('0015ceb851d7251b8f399e39779d1e7d')
 
-    df = pd.DataFrame.from_csv('stage1_labels.csv')
+    #df = pd.DataFrame.from_csv('stage1_labels.csv')
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
-    PIDL = df.index.tolist()
-    # PIDL = os.listdir(CORPUS_DIR)
+    #PIDL = df.index.tolist()
+    PIDL = os.listdir(CORPUS_DIR)
     Parallel(n_jobs=4)(delayed(test_convert)(pid, mask_dir=MASK_DIR, segment=True) for pid in PIDL)
 
 
