@@ -7,15 +7,15 @@ from preprocess import *
 from joblib import Parallel, delayed
 
 SP2_BOX = (210, 180, 210)
-# CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
-# TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
-# MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
+CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
+TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
+MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/masks/'
 # CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/corpus/'
 # TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/train/'
 # MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/masks/'
-CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
-TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
-MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
+# CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
+# TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
+# MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
 	print('id, nslices, shape, max, min ')
 	for subpath in os.listdir(path):
@@ -92,7 +92,7 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
 
     # except:
 
-    image, new_spacing = resample(image, slices, [2,2,2])
+    #image, new_spacing = resample(image, slices, [2,2,2])
     if segment:
         assert os.path.exists(mask_dir)
         if not image[0,0,0] < -400:
@@ -106,6 +106,7 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
         image = image*mask
         mask = mask.astype('int8')
         if mask_dir:
+            mask, _ = resample(mask, slices, [2,2,2])
             mfname = mask_dir+'mask_'+pid+'.npy'
             np.save(mfname, mask)
         #segmented_mask_fill = segment_lung_mask(image, True)
@@ -113,8 +114,9 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
         # img, _ = resample(img, slices, [2,2,2])
         #mask = ndimage.binary_dilation(water_seg, iterations=1)
         #img = img*mask
-    # image, new_spacing = resample(image, slices, [2,2,2])
-    image = normalize(image, mask=mask)
+    image, new_spacing = resample(image, slices, [2,2,2])
+
+    image, pixmean, msum = normalize(image, mask=mask)
     #image = zero_center(normalize(image),mean=0.5)
     image = image.astype('float32')
     
@@ -128,7 +130,7 @@ def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None,
     
     np.save(filename, image)
     print(pid, 'processed')
-    return 0
+    return pixmean, msum
 
 
 def check_corpus(filename='stage1_labels.csv'):
@@ -174,6 +176,11 @@ def plot_box_dims(boxes):
     plt.plot(cdim, label='c')
     plt.legend()
 
+#Other pandas operations:
+# df.to_pickle('name.pkl')
+# boxes = pd.from_pickle('name.pkl')
+# boxes.loc[lambda boxes: boxes.zmax-boxes.zmin>200, :]
+
 def apply_bbox(data_dir, target_dir, mask_dir=MASK_DIR, pid=None, sizes=SP2_BOX):
     if pid:
         if pid.endswith('.npy'):
@@ -213,8 +220,10 @@ if __name__=='__main__':
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
     #PIDL = df.index.tolist()
     PIDL = os.listdir(CORPUS_DIR)
-    Parallel(n_jobs=4)(delayed(test_convert)(pid, mask_dir=MASK_DIR, segment=True) for pid in PIDL)
-
+    sums = Parallel(n_jobs=16)(delayed(test_convert)(pid, mask_dir=MASK_DIR, segment=True) for pid in PIDL)
+    pix_means, mask_sum = zip(*sums)
+    corpus_pixel_mean = np.average(pix_means, weights=mask_sum)
+    print('pixel mean is: ', corpus_pixel_mean)
 
     #to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
     # to_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'

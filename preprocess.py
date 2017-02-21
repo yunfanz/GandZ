@@ -17,10 +17,12 @@ def normalize(image, mask=None):
     image = (image - MIN_BOUND) / (MAX_BOUND - MIN_BOUND)
     image[image>1] = 1.
     image[image<0] = 0.
-    if mask is None:
-        return image
-    else: 
-        return image*mask
+    mask_sum = image.size
+    if mask is not None:
+        image = image*mask
+        mask_sum = np.sum(mask)
+    pix_mean = np.sum(image)/mask_sum
+    return image, pix_mean, mask_sum
 
 def load_scan(path, single_file=False, min_slices=20):
     if single_file:
@@ -226,9 +228,10 @@ def _watershed_markers_3d(image):
     
     #Creation of the internal Marker
     binary_image = np.array(image > -320, dtype=np.int8)+1
-    labels = measure.label(binary_image)
+    labels = measure.label(binary_image, connectivity=1)
     background_label = labels[0,0,0]
-    #Fill the air around the person
+    #Fill the air around the person 
+    #This will remove some 
     image[background_label == labels] = 0
 
 
