@@ -42,6 +42,24 @@ def load_scan(path, single_file=False, min_slices=20):
         
     return slices
 
+def get_thickness(path, single_file=False, min_slices=20):
+    """get thickness of every slice"""
+    if single_file:
+        return [dicom.read_file(path)]
+    elif len(os.listdir(path))<min_slices:
+        print('Too few slices, skipping', path)
+        return
+    slices = [dicom.read_file(path + '/' + s) for s in os.listdir(path) if s.endswith('.dcm')]
+    slices.sort(key = lambda x: float(x.ImagePositionPatient[2]))
+    try:
+        Zs = np.asarray([float(s.ImagePositionPatient[2]) for s in slices])
+    except:
+        Zs = np.asarray([float(s.SliceLocation) for s in slices])
+    slice_thickness = np.abs(Zs[:-1] - Zs[1:])
+
+        
+    return slice_thickness
+
 def get_pixels_hu(slices):
     image = np.stack([s.pixel_array for s in slices])
     # Convert to int16 (from sometimes int16), 

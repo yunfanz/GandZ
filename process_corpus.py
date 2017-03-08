@@ -13,7 +13,7 @@ MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/masks/'
 # CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/corpus/'
 # TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/train/'
 # MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/masks/'
-# CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
+#CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1/'
 # TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
 # MASK_DIR = '/home/yunfanz/Data/Kaggle/LungCan/stage1_processed/sp2_waterseg/masks/'
 def get_corpus_metadata(path='/data2/Kaggle/LungCan/stage1/'):
@@ -73,6 +73,19 @@ def convert_patient_dcm(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_di
     np.save(filename, img)
     print(pid, 'processed')
     return 0
+
+
+def check_homogeneity(pid, data_dir=CORPUS_DIR, decimals=2):
+    """check if slice thickness are homogenous"""
+    if not os.path.exists(data_dir+pid):
+        print('no', pid)
+        return
+    sliceThickness = np.around(check_thickness(data_dir+pid), decimals=decimals)
+    OK = np.all(sliceThickness==sliceThickness[0])
+    if OK:
+        print(pid, sliceThickness[0])
+    else:
+        print(pid, sliceThickness)
 
 def test_convert(pid, data_dir=CORPUS_DIR, target_dir=TARGET_DIR, mask_dir=None, bbox=False, segment=False):
     '''Generator that yields pixel_array from dataset, and
@@ -220,10 +233,11 @@ if __name__=='__main__':
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
     #PIDL = df.index.tolist()
     PIDL = os.listdir(CORPUS_DIR)
-    sums = Parallel(n_jobs=16)(delayed(test_convert)(pid, mask_dir=MASK_DIR, segment=True) for pid in PIDL)
-    pix_means, mask_sum = zip(*sums)
-    corpus_pixel_mean = np.average(pix_means, weights=mask_sum)
-    print('pixel mean is: ', corpus_pixel_mean)
+    Parallel(n_jobs=4)(delayed(check_SL)(pid) for pid in PIDL)
+    # sums = Parallel(n_jobs=16)(delayed(test_convert)(pid, mask_dir=MASK_DIR, segment=True) for pid in PIDL)
+    # pix_means, mask_sum = zip(*sums)
+    # corpus_pixel_mean = np.average(pix_means, weights=mask_sum)
+    # print('pixel mean is: ', corpus_pixel_mean)
 
     #to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
     # to_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
