@@ -6,9 +6,9 @@ from scipy import ndimage
 from preprocess import *
 from joblib import Parallel, delayed
 
-SP2_BOX = (210, 180, 210)
+SP2_BOX = (200, 180, 200)
 CORPUS_DIR = '/data2/Kaggle/LungCan/stage1/'
-TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
+TARGET_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
 MASK_DIR = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/masks/'
 # CORPUS_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/corpus/'
 # TARGET_DIR = '/home/yunfanz/Data/Kaggle/LungCan/tmp/train/'
@@ -164,7 +164,10 @@ def get_box_sizes(path=MASK_DIR, mode='pandas', verbose=False):
         i=0
         for file in os.listdir(path):
             mask = np.load(path+file)
-            zmin, zmax, rmin, rmax, cmin, cmax = bbox_3d(mask)
+            try:
+                zmin, zmax, rmin, rmax, cmin, cmax = bbox_3d(mask)
+            except:
+                continue
             pid = file.split('.')[0].split('_')[1]
             boxes.loc[pid] = {'zmin':zmin, 'zmax':zmax, 'rmin':rmin, 'rmax':rmax, 'cmin':cmin, 'cmax':cmax}
             if verbose: print(i, pid)
@@ -232,17 +235,18 @@ if __name__=='__main__':
     #df = pd.DataFrame.from_csv('stage1_labels.csv')
     #df = pd.DataFrame.from_csv('stage1_sample_submission.csv')
     #PIDL = df.index.tolist()
-    PIDL = os.listdir(CORPUS_DIR)
-    Parallel(n_jobs=4)(delayed(check_homogeneity)(pid) for pid in PIDL)
+    #PIDL = os.listdir(CORPUS_DIR)
+    #Parallel(n_jobs=4)(delayed(check_homogeneity)(pid) for pid in PIDL)
     # sums = Parallel(n_jobs=16)(delayed(test_convert)(pid, mask_dir=MASK_DIR, segment=True) for pid in PIDL)
     # pix_means, mask_sum = zip(*sums)
     # corpus_pixel_mean = np.average(pix_means, weights=mask_sum)
     # print('pixel mean is: ', corpus_pixel_mean)
 
     #to_dir = '/home/yunfanz/Projects/Kaggle/LungCan/DATA/train/'
-    # to_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
-    # from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
-    # PIDL = os.listdir(from_dir)
-    # Parallel(n_jobs=4)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
+    to_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/train/'
+    from_dir = '/data2/Kaggle/LungCan/stage1_processed/sp2_waterseg/unboxed/train/'
+    PIDL = os.listdir(from_dir)
+    PIDL.remove('b8bb02d229361a623a4dc57aa0e5c485.npy')
+    Parallel(n_jobs=4)(delayed(apply_bbox)(from_dir, to_dir, pid=pid) for pid in PIDL)
 
 

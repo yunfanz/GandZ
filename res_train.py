@@ -5,7 +5,7 @@ import numpy as np
 import os
 import time
 MOMENTUM = 0.9
-SP2_BOX = (210,180,210,1)
+SP2_BOX = (200,180,200,1)
 FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './tmp/resnet_train/',
                            """Directory where to write event logs """

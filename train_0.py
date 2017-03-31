@@ -5,7 +5,7 @@ import numpy as np
 import os
 import time
 MOMENTUM = 0.9
-SP2_BOX = (210,180,210,1)
+SP2_BOX = (200,180,200,1)
 FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './tmp/resnet_train/',
                            """Directory where to write event logs """
@@ -160,7 +160,7 @@ def train(sess, net, is_training):
     tf.scalar_summary('learning_rate', FLAGS.learning_rate)
     ###
     #opt = tf.train.MomentumOptimizer(FLAGS.learning_rate, MOMENTUM)
-    opt = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate,beta1=0.6, beta2=0.999, epsilon=1e-5)
+    opt = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate,beta1=0.9, beta2=0.999, epsilon=1e-8)
     ###
     grads = opt.compute_gradients(loss_)
     for grad, var in grads:
